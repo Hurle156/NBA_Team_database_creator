@@ -2,11 +2,12 @@
 import pandas as pd
 import requests
 from splinter import Browser
+import time
 
-#open browser that will find the correct pages to scrape.
-#you will need to change the chromedriver location to match your computer.
-executable_path = {'executable_path': '/bin/chromedriver.exe'}
-browser = Browser('chrome', **executable_path, headless = True)
+#gives place to pick the team you want to create a database for
+#you can use partial City or Team names this is case sensitive for now
+print("Enter a NBA Team Name or City")
+team = input()
 
 #open browser that will find the correct pages to scrape.
 #you will need to change the chromedriver location to match your computer.
@@ -18,12 +19,14 @@ team_df = pd.DataFrame()
 
 #loads in first url to visit with a list of links to all NBA teams past and present
 browser.visit(f'https://www.basketball-reference.com/teams/')
+#slow the program down to let the browser catch up
+time.sleep(2)
 #this is so we can have the full team name in the database name.
 Full_Team = browser.links.find_by_partial_text(team).first.text
 Team_Name = Full_Team.split(" ")[1]
-
+print(Team_Name)
 #Clicks the link for the team you picked when asked for input
-browser.links.find_by_partial_text(Full_Team).click()
+browser.links.find_by_partial_text(team).click()
 
 #scrapes the website the browser is currently opened on for tables of data
 team_table = pd.read_html(browser.html)
@@ -35,11 +38,12 @@ team_df = team_df.drop(columns=["Lg",  "Unnamed: 8", "Unnamed: 15", "Top WS", "S
                                "DRtg", "Rel DRtg"])
 team_df.drop(team_df[team_df['Season'] == 'Season'].index, inplace = True)
 team_df = team_df.reset_index(drop=False)
-team_df = team_df.rename(columns = {"index":"Season_Id", "W/L%":"Win_Pct"}
+team_df = team_df.rename(columns = {"index":"Season_Id", "W/L%":"Win_Pct"})
 
 #resets the browser to the originaly site, this helps limit some errors down the line
 browser.visit(f'https://www.basketball-reference.com/teams/')
-
+#same as below
+time.sleep(2)
 #same as above just here to limit errors
 browser.links.find_by_partial_text(Full_Team).click()
 
@@ -56,6 +60,7 @@ Syear = year1.split('-')[0]
 
 #for loop that will scrape each season for which ever team you selected
 for y in range(seasons):
+    time.sleep(2)
     #again so we can find the correct link
     year = int(Syear) + y
     #helps us track where issues may have arisen if we get an error
@@ -118,10 +123,12 @@ Season_Totals = pd.merge(Season_Totals, Player_Ids, on = ['Player', 'Player'])
 #Drops any unneccesary columns so there will be no duplicate info in the entire data base
 Season_Totals = Season_Totals.drop(columns=["Player",  "year", "Season", "Season_e"])
 
+#imports sqlalchemy so we can create a sql database to store and query our data in
 from sqlalchemy import create_engine
+from sqlalchemy_utils import database_exists, create_database
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Float
-
+#creates the table we will be pushing our data into
 base = declarative_base()
 
 
@@ -177,16 +184,25 @@ class Roster(base):
     Country = Column(String(50))
     College = Column(String(200))
 
-engine =  create_engine(f'sqlite:///data/{Team_Name}.sqlite')
+#postgresql may need a password to be entered so you can add your password here
+print("Please enter your Postgres password.")
+password = input()
+
+#creates the connection to postgres
+connection_string = f'{password}:postgres@localhost:5432/{Team_Name}'
+engine = create_engine(f'postgresql://{connection_string}')
+if not database_exists(engine.url):
+    create_database(engine.url)
 conn = engine.connect()
-
+#drops existing tables that may create duplicates since this scrapes a the entire history every time and is not an updater
 base.metadata.drop_all(engine)
+#recreates the table to store the data
 base.metadata.create_all(engine)
-
+#one last package we need in order to push the data to the sql database
 from sqlalchemy.orm import Session
-
+#starts sql session
 session = Session(bind = engine)
-
+#pushes data to our sql database
 All_Players.to_sql(name = "Roster", con = engine, if_exists = "append", index = False)
 
 team_df.to_sql(name = "Team_Stats", con = engine, if_exists = "append", index = False)
