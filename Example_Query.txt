@@ -1,0 +1,6 @@
+select "Roster"."Player", Sum("Player_Stats"."PTS") as "Total Points", count("Player_Stats"."Season_Id") as "Seasons" 
+from "Roster"
+join "Player_Stats" 
+ON "Roster"."Player_Id" = "Player_Stats"."Player_Id"
+Group by "Roster"."Player"
+order by "Total Points" desc;
