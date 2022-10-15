@@ -5,4 +5,4 @@ You will need a postgres password to use correctly.
 
 You will need the newest version of chromedriver and will need to update the chromedriver path to match your system.  
 
-
+There are two files with mostly the same code as I prefer to write and edit code in Jupyter Notebooks before everything is consolidated into a single .py file.
